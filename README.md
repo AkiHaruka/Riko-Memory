@@ -88,7 +88,7 @@ ln -sfn /root/riko/tools/riko-memory-dsh /root/.dsh/profiles/web/node_modules/ri
 ```
 
 ### 2. 建立 peerDependencies 软链
-在插件目录下建立指向 DSH 运行环境 `@deepseek-ai/dsh-llm` 与 `@deepseek-ai/dsh-tools` 的软链（在 DSH 容器内执行）：
+在插件目录下建立指向 DSH 运行环境 `@deepseek-ai/dsh-llm` 与 `@deepseek-ai/dsh-tools` 的软链。在 DSH 容器内执行：
 ```bash
 bash /root/riko/tools/riko-memory-dsh/scripts/link-peers.sh
 ```
@@ -100,8 +100,9 @@ cp -a /root/.dsh/profiles/web/cordis.patch.yml{,.bak-20261101}
 ```
 
 ### 4. 修改 cordis.patch.yml
-- 从 `/root/.dsh/profiles/web/cordis.patch.yml` 中删除旧的 `- id: riko-hymem ...`（`@aki_riko/hymem-dsh`）整段配置。
-- 插入 `riko-memory-dsh` 配置块：
+在 DSH 容器内编辑 `/root/.dsh/profiles/web/cordis.patch.yml`：
+- 删除旧的 `- id: riko-hymem ...`（`@aki_riko/hymem-dsh`）整段配置。
+- 插入 `riko-memory-dsh` 配置块（在 DSH 容器内编辑）：
 ```yaml
 - id: riko-memory-dsh
   name: 'riko-memory-dsh'
@@ -124,17 +125,26 @@ cp -a /root/.dsh/profiles/web/cordis.patch.yml{,.bak-20261101}
 ```
 
 ### 5. 重启 DSH 容器
-在宿主（Host）执行（需征得爹地同意）：
+在宿主执行（需征得爹地同意，DSH 容器内无 docker CLI）：
 ```bash
 docker restart riko-dsh
 ```
 
 ### 6. 冒烟检查
-1. 查看 DSH 容器启动日志中插件加载情况：
+1. 在**宿主**执行：查看容器启动日志，确认插件加载成功：
 ```bash
-docker logs --tail 100 riko-dsh | grep riko-memory-dsh
+docker logs --tail 300 riko-dsh 2>&1 | grep "riko-memory-dsh"
 ```
-2. 验证 SOUL 与常驻状态板正常注入，且 5 个工具均可正常调用（如调用 `memory_status` 返回 EverOS 健康状态）。
+应看到两行：`riko-memory-dsh: 已注册 5 个记忆工具` 和 `riko-memory-dsh: 插件加载完成`。
+2. 在 **DSH 会话里**执行：调用 `memory_status`，期望返回 `EverOS 1.6.0 status=ok … md 根：/data/everos`（版本号按实际）。
+3. 在 **DSH 会话里**执行：调用检索与列表：
+   - 调用 `memory_search`（如 `query="记忆系统"`）应有结果；
+   - 调用 `memory_list` 第一页 footer 形如 `共 N 条，已显示 1-10`。
+4. 在 **DSH 会话里**人工确认：SOUL 注入。在新会话里观察 Agent 的自我认知/说话风格是否符合 soul；脚本无法断言，需人工检查。
+5. 在 **DSH 会话里**人工确认：常驻记忆注入。发生一次 compact 后，下一轮 pre-step 会出现 `<riko-resident>` 包裹的注入消息；等自然 compact 或手动触发压缩后观察会话确认。
+6. 排错指南（若工具未出现）：
+   - 在**宿主**查看日志，若搜到 `Cannot find package`：说明 peerDependencies 缺失，在 **DSH 容器内**重跑 `scripts/link-peers.sh`；
+   - 在**宿主**查看日志，若搜到 `riko-memory-dsh` 名字解析错误：检查 **DSH 容器内** profile 软链是否建立（`/root/.dsh/profiles/web/node_modules/riko-memory-dsh`）。
 
 ---
 
@@ -142,25 +152,26 @@ docker logs --tail 100 riko-dsh | grep riko-memory-dsh
 
 若新插件或 EverOS 服务出现异常需紧急回滚：
 
-1. **恢复配置文件**（DSH 容器内）：
+1. **恢复配置文件**（在 DSH 容器内执行）：
 ```bash
 cp -a /root/.dsh/profiles/web/cordis.patch.yml.bak-20261101 /root/.dsh/profiles/web/cordis.patch.yml
 ```
 
-2. **移除插件软链**（DSH 容器内）：
+2. **移除插件软链**（在 DSH 容器内执行）：
 ```bash
 rm -f /root/.dsh/profiles/web/node_modules/riko-memory-dsh
 ```
 *(注：`/root/riko/tools/riko-memory-dsh` 插件源码目录与内建 node_modules 软链可保留，无需删除)*
 
-3. **宿主启动旧记忆容器**（宿主执行）：
+3. **启动旧记忆容器**（在宿主执行）：
 ```bash
 docker start hy-memory
 ```
 
-4. **宿主重启 DSH 容器**（宿主执行）：
+4. **重启 DSH 容器**（在宿主执行）：
 ```bash
 docker restart riko-dsh
 ```
 
-5. **验证旧工具恢复**：在对话中调用 `memory_status` 确认旧 Hy-Memory 恢复正常。
+5. **验证旧工具恢复**（在 DSH 会话里执行）：
+在 DSH 会话里调用 `memory_status` 确认旧 Hy-Memory 恢复正常。
