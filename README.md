@@ -22,27 +22,28 @@
 
 ## 配置项（cordis.patch.yml）
 
-在 DSH profile 的 `cordis.patch.yml` 中插入如下实例配置：
+在 DSH profile 的 `cordis.patch.yml` 中配置如下实例（必须放在 `- insert:` 列表中，不能写成顶层 `- id:` 条目）：
 
 ```yaml
-- id: riko-memory-dsh
-  name: 'riko-memory-dsh'
-  config:
-    everosUrl: 'http://127.0.0.1:18100'
-    appId: riko
-    projectId: main
-    userId: aki
-    agentId: riko
-    timeoutMs: 120000
-    soulEnabled: true
-    soulFile: '/root/riko/soul.md'
-    residentEnabled: true
-    residentFile: '/root/riko/memory/resident.md'
-    residentBudgetChars: 6000
-    toolsEnabled: true
-    mdRoot: '/data/everos'
-    workspaceAllow:
-      - '/root/riko'
+- insert:
+    - id: riko-memory-dsh
+      name: 'riko-memory-dsh'
+      config:
+        everosUrl: 'http://127.0.0.1:18100'
+        appId: riko
+        projectId: main
+        userId: aki
+        agentId: riko
+        timeoutMs: 120000
+        soulEnabled: true
+        soulFile: '/root/riko/soul.md'
+        residentEnabled: true
+        residentFile: '/root/riko/memory/resident.md'
+        residentBudgetChars: 6000
+        toolsEnabled: true
+        mdRoot: '/data/everos'
+        workspaceAllow:
+          - '/root/riko'
 ```
 
 ### 配置字段说明
@@ -98,44 +99,64 @@ bash /root/riko/tools/riko-memory-dsh/scripts/link-peers.sh
 ```bash
 cp -a /root/.dsh/profiles/web/cordis.patch.yml{,.bak-20261101}
 ```
+（注：只需要备份 `cordis.patch.yml`；hymem 的 bundle patch 是空列表，切换时不用动 `profile/package.json`，也不要去改 pnpm 依赖，无需执行 `pnpm install`。）
 
 ### 4. 修改 cordis.patch.yml
 在 DSH 容器内编辑 `/root/.dsh/profiles/web/cordis.patch.yml`：
-- 删除旧的 `- id: riko-hymem ...`（`@aki_riko/hymem-dsh`）整段配置。
-- 插入 `riko-memory-dsh` 配置块（在 DSH 容器内编辑）：
+
+用下面这一整段替换文件里原来的 `- insert:` 块（该块里目前只有 `- id: riko-hymem` 一项）。不要留下空的 `insert`，也不要把新条目写成顶层 `- id:`（顶层条目只能 patch 已存在的 entry，DSH 会报 `patch: entry "riko-memory-dsh" not found` 并且不加载插件）：
+
 ```yaml
-- id: riko-memory-dsh
-  name: 'riko-memory-dsh'
-  config:
-    everosUrl: 'http://127.0.0.1:18100'
-    appId: riko
-    projectId: main
-    userId: aki
-    agentId: riko
-    timeoutMs: 120000
-    soulEnabled: true
-    soulFile: '/root/riko/soul.md'
-    residentEnabled: true
-    residentFile: '/root/riko/memory/resident.md'
-    residentBudgetChars: 6000
-    toolsEnabled: true
-    mdRoot: '/data/everos'
-    workspaceAllow:
-      - '/root/riko'
+- insert:
+    - id: riko-memory-dsh
+      name: 'riko-memory-dsh'
+      config:
+        everosUrl: 'http://127.0.0.1:18100'
+        appId: riko
+        projectId: main
+        userId: aki
+        agentId: riko
+        timeoutMs: 120000
+        soulEnabled: true
+        soulFile: '/root/riko/soul.md'
+        residentEnabled: true
+        residentFile: '/root/riko/memory/resident.md'
+        residentBudgetChars: 6000
+        toolsEnabled: true
+        mdRoot: '/data/everos'
+        workspaceAllow:
+          - '/root/riko'
 ```
 
-### 5. 重启 DSH 容器
+### 5. 部署前组合预检
+在 DSH 容器内执行：
+```bash
+dsh --profile web --dump-config > /tmp/dump-memory.yml 2>/tmp/dump-memory.err; echo "EXIT=$?"; cat /tmp/dump-memory.err; grep -n "riko-memory-dsh\|riko-hymem" /tmp/dump-memory.yml
+```
+
+`--dump-config` 只做组合不挂载插件，安全，所以可以重启前先验。
+
+期望结果：
+1. `EXIT=0`；
+2. stderr 为空（出现 `patch: entry ... not found` 或 `Cannot find package` 就停下来修，不要重启）；
+3. `/tmp/dump-memory.yml` 里有 `- id: riko-memory-dsh` 一整段（含 `everosUrl` 等 config）；
+4. 不再有 `- id: riko-hymem`。
+
+### 6. 重启 DSH 容器
 在宿主执行（需征得爹地同意，DSH 容器内无 docker CLI）：
 ```bash
 docker restart riko-dsh
 ```
 
-### 6. 冒烟检查
+### 7. 冒烟检查
 1. 在**宿主**执行：查看容器启动日志，确认插件加载成功：
 ```bash
 docker logs --tail 300 riko-dsh 2>&1 | grep "riko-memory-dsh"
 ```
-应看到两行：`riko-memory-dsh: 已注册 5 个记忆工具` 和 `riko-memory-dsh: 插件加载完成`。
+应看到两行：
+- `riko-memory-dsh: 已注册 5 个记忆工具 (user_id=aki, url=http://127.0.0.1:18100)`
+- `riko-memory-dsh: 插件加载完成 tools=true soul=true resident=true url=http://127.0.0.1:18100`
+（注：参数按实际配置略有不同，比如 `user_id` 和 `url`）。
 2. 在 **DSH 会话里**执行：调用 `memory_status`，期望返回 `EverOS 1.6.0 status=ok … md 根：/data/everos`（版本号按实际）。
 3. 在 **DSH 会话里**执行：调用检索与列表：
    - 调用 `memory_search`（如 `query="记忆系统"`）应有结果；
