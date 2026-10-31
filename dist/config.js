@@ -111,6 +111,15 @@ export function resolveConfig(raw = {}) {
     // tools
     const toolsEnabled = raw.toolsEnabled !== false;
 
+    // mdRoot
+    let mdRoot = "/data/everos";
+    if (raw.mdRoot !== undefined) {
+        if (typeof raw.mdRoot !== "string" || !raw.mdRoot.trim()) {
+            throw new Error("mdRoot 必须为非空字符串");
+        }
+        mdRoot = raw.mdRoot.trim();
+    }
+
     // workspaceAllow
     let workspaceAllow = ["/root/riko"];
     if (raw.workspaceAllow !== undefined) {
@@ -133,6 +142,7 @@ export function resolveConfig(raw = {}) {
         residentFile,
         residentBudgetChars,
         toolsEnabled,
+        mdRoot,
         workspaceAllow,
     };
 }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -18,9 +18,12 @@ function extractImports(sourceCode) {
     return imports;
 }
 
-test("P12: 静态检查 - dist/index.js import 的模块只有参考实现中出现的 DSH 包与 node 内置模块", () => {
-    // 1. 读取参考实现 dist/index.js 中出现的外部包
-    const refIndexPath = "/work/research/hymem-dsh-reference/dist/index.js";
+test("P12: 静态检查 - dist/index.js 与 define.js import 的模块符合白名单约束", () => {
+    // 1. 读取参考实现 dist/index.js 中出现的外部包（相对路径，不硬编码 /work）
+    const refIndexPath = join(rootDir, "..", "..", "research", "hymem-dsh-reference", "dist", "index.js");
+    if (!existsSync(refIndexPath)) {
+        assert.fail(`参考实现 index.js 不存在，实际查找路径: ${refIndexPath}`);
+    }
     const refCode = readFileSync(refIndexPath, "utf8");
     const refImports = extractImports(refCode);
     const refDshPackages = new Set(
@@ -68,8 +71,69 @@ test("P12: 静态检查 - dist/index.js import 的模块只有参考实现中出
         }
     }
 
-    // 4. 检查 package.json 零 dependencies 网络包
+    // 4. 检查 dist/define.js：仅允许引入 @deepseek-ai/dsh-tools 与本地相对模块
+    const defineFilePath = join(rootDir, "dist", "define.js");
+    assert.ok(existsSync(defineFilePath), "dist/define.js 必须存在");
+    const defineCode = readFileSync(defineFilePath, "utf8");
+    const defineImports = extractImports(defineCode);
+    for (const imp of defineImports) {
+        if (imp.startsWith("node:") || imp.startsWith("./") || imp.startsWith("../")) {
+            continue;
+        }
+        assert.equal(
+            imp,
+            "@deepseek-ai/dsh-tools",
+            `dist/define.js 外部 DSH 包只允许 @deepseek-ai/dsh-tools，实际引入了: ${imp}`
+        );
+    }
+
+    // 5. 检查 package.json 零 dependencies 网络包
     const pkgJson = JSON.parse(readFileSync(join(rootDir, "package.json"), "utf8"));
     assert.equal(pkgJson.dependencies, undefined, "package.json 不得声明 dependencies 网络包");
     assert.ok(pkgJson.peerDependencies, "package.json 必须保留 peerDependencies");
+});
+
+test("P13: 静态检查 - define.js 走官方 defineTool 且 index.js 从 define.js 接入", () => {
+    // 1. define.js 存在
+    const definePath = join(rootDir, "dist", "define.js");
+    assert.ok(existsSync(definePath), `dist/define.js 必须存在: ${definePath}`);
+    const defineCode = readFileSync(definePath, "utf8");
+
+    // 2. import 了 @deepseek-ai/dsh-tools 的 defineTool
+    const defineImports = extractImports(defineCode);
+    assert.ok(
+        defineImports.includes("@deepseek-ai/dsh-tools"),
+        "define.js 必须 import @deepseek-ai/dsh-tools"
+    );
+    assert.match(
+        defineCode,
+        /import\s+{[^}]*defineTool[^}]*}\s+from\s+["']@deepseek-ai\/dsh-tools["']/,
+        "define.js 必须明确 import defineTool"
+    );
+
+    // 3. 对 buildMemoryHandlers 的每个 handler 调用 defineTool
+    assert.match(
+        defineCode,
+        /buildMemoryHandlers\([^)]*\)\.map\(\s*\(?\w+\)?\s*=>\s*defineTool\(\w+\)\)/,
+        "define.js 必须对 buildMemoryHandlers 返回的每个 handler 映射调用 defineTool"
+    );
+
+    // 4. index.js 从 ./define.js 引入 buildMemoryTools / buildDisabledTools，不再直接 import tools.js
+    const indexPath = join(rootDir, "dist", "index.js");
+    const indexCode = readFileSync(indexPath, "utf8");
+    assert.match(
+        indexCode,
+        /import\s+{[^}]*buildMemoryTools[^}]*}\s+from\s+["']\.\/define\.js["']/,
+        "dist/index.js 必须从 ./define.js 引入 buildMemoryTools"
+    );
+    assert.match(
+        indexCode,
+        /import\s+{[^}]*buildDisabledTools[^}]*}\s+from\s+["']\.\/define\.js["']/,
+        "dist/index.js 必须从 ./define.js 引入 buildDisabledTools"
+    );
+    assert.doesNotMatch(
+        indexCode,
+        /from\s+["']\.\/tools\.js["']/,
+        "dist/index.js 不得直接 import tools.js"
+    );
 });

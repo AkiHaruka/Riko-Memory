@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { resolveConfig } from "../dist/config.js";
-import { buildMemoryTools } from "../dist/tools.js";
+import { buildMemoryHandlers } from "../dist/tools.js";
 
 // 启动端口 0 的假 EverOS 服务器辅助工具
 async function withMockEverOS(handler, fn) {
@@ -110,7 +110,7 @@ test("P3: memory_search - 请求体校验、多 query 去重合并与格式化�
         },
         async (everosUrl) => {
             const cfg = resolveConfig({ everosUrl });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const searchTool = tools.find((t) => t.name === "memory_search");
 
             // 1. 单 query 检验请求体与格式化输出
@@ -159,7 +159,7 @@ test("P4: memory_search - 无结果与服务不可用两种返回", async () => 
         },
         async (everosUrl) => {
             const cfg = resolveConfig({ everosUrl });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const searchTool = tools.find((t) => t.name === "memory_search");
 
             // 1. 无结果
@@ -188,7 +188,7 @@ test("P5: memory_remember - text/messages 映射与 add->flush 调用序列", as
         },
         async (everosUrl) => {
             const cfg = resolveConfig({ everosUrl });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const rememberTool = tools.find((t) => t.name === "memory_remember");
 
             // 1. text 输入
@@ -237,7 +237,7 @@ test("P5: memory_remember - text/messages 映射与 add->flush 调用序列", as
         },
         async (everosUrl) => {
             const cfg = resolveConfig({ everosUrl });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const rememberTool = tools.find((t) => t.name === "memory_remember");
 
             const resFlushFail = await rememberTool.execute({ text: "临时测试" });
@@ -247,7 +247,7 @@ test("P5: memory_remember - text/messages 映射与 add->flush 调用序列", as
     );
 });
 
-test("P6: memory_profile - 请求体与格式化，空画像返回", async () => {
+test("P6: memory_profile - 请求体与格式化，空画像返回，超过50条截断", async () => {
     let mode = "has_profile";
     let recordedReq = null;
 
@@ -263,8 +263,45 @@ test("P6: memory_profile - 请求体与格式化，空画像返回", async () =>
                                 {
                                     id: "prof_1",
                                     profile_data: {
-                                        称呼: "爹地",
-                                        偏好: "甜口辣子鸡",
+                                        summary: "关于爹地的核心事实与日常偏好",
+                                        explicit_info: [
+                                            {
+                                                category: "称呼",
+                                                description: "爹地是人类开发者",
+                                                evidence: "日常对话",
+                                                observed_at: "2026-10-30",
+                                            },
+                                            {
+                                                category: "偏好",
+                                                description: "甜口辣子鸡",
+                                                evidence: "夜宵点单记录",
+                                                observed_at: "2026-10-31",
+                                            },
+                                        ],
+                                        implicit_traits: ["对妹妹很温柔", "喜欢技术细节清晰"],
+                                        profile_timestamp_ms: 1730371200000,
+                                    },
+                                },
+                            ],
+                        },
+                    })
+                );
+            } else if (mode === "overflow") {
+                const manyInfo = Array.from({ length: 55 }, (_, i) => ({
+                    category: `分类${i + 1}`,
+                    description: `事实条目${i + 1}`,
+                    evidence: `证据${i + 1}`,
+                }));
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(
+                    JSON.stringify({
+                        data: {
+                            profiles: [
+                                {
+                                    id: "prof_many",
+                                    profile_data: {
+                                        summary: "超长事实画像",
+                                        explicit_info: manyInfo,
                                     },
                                 },
                             ],
@@ -278,10 +315,10 @@ test("P6: memory_profile - 请求体与格式化，空画像返回", async () =>
         },
         async (everosUrl) => {
             const cfg = resolveConfig({ everosUrl });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const profileTool = tools.find((t) => t.name === "memory_profile");
 
-            // 有画像
+            // 1. 有真实形状画像：断言请求体无 limit/offset 且含 page=1, page_size=1
             const res = await profileTool.execute({});
             assert.equal(res.ok, true);
             assert.equal(recordedReq.url, "/api/v2/memory/get");
@@ -289,10 +326,26 @@ test("P6: memory_profile - 请求体与格式化，空画像返回", async () =>
             assert.equal(recordedReq.body.app_id, "riko");
             assert.equal(recordedReq.body.project_id, "main");
             assert.equal(recordedReq.body.memory_type, "profile");
-            assert.match(res.data, /称呼：爹地/);
-            assert.match(res.data, /偏好：甜口辣子鸡/);
+            assert.equal(recordedReq.body.page, 1);
+            assert.equal(recordedReq.body.page_size, 1);
+            assert.equal(recordedReq.body.limit, undefined);
+            assert.equal(recordedReq.body.offset, undefined);
 
-            // 空画像
+            assert.match(res.data, /^摘要：关于爹地的核心事实与日常偏好/);
+            assert.match(res.data, /- \[称呼\] 爹地是人类开发者/);
+            assert.match(res.data, /- \[偏好\] 甜口辣子鸡/);
+            assert.match(res.data, /隐性特质：\n- 对妹妹很温柔\n- 喜欢技术细节清晰/);
+
+            // 2. 超出 50 条 explicit_info 截断断言
+            mode = "overflow";
+            const resOverflow = await profileTool.execute({});
+            assert.equal(resOverflow.ok, true);
+            assert.match(resOverflow.data, /- \[分类1\] 事实条目1/);
+            assert.match(resOverflow.data, /- \[分类50\] 事实条目50/);
+            assert.match(resOverflow.data, /- …（共 55 条，已显示 50 条）/);
+            assert.equal(resOverflow.data.includes("分类51"), false);
+
+            // 3. 空画像
             mode = "empty";
             const resEmpty = await profileTool.execute({});
             assert.equal(resEmpty.ok, true);
@@ -303,55 +356,95 @@ test("P6: memory_profile - 请求体与格式化，空画像返回", async () =>
 
 test("P7: memory_list - 分页参数与输出行格式", async () => {
     let recordedReq = null;
+    let mode = "normal";
 
     await withMockEverOS(
         (req, res, body) => {
             recordedReq = { url: req.url, body };
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(
-                JSON.stringify({
-                    data: {
-                        total_count: 15,
-                        episodes: [
-                            {
-                                id: "ep_1",
-                                timestamp: "2026-10-31T12:00:00+08:00",
-                                summary: "今天完成了 Phase C 的插件开发。",
-                            },
-                            {
-                                id: "ep_2",
-                                timestamp: "2026-10-30T10:00:00+08:00",
-                                summary: "爹地拍板记忆系统方案。",
-                            },
-                        ],
-                    },
-                })
-            );
+            if (mode === "normal") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(
+                    JSON.stringify({
+                        data: {
+                            total_count: 15,
+                            episodes: [
+                                {
+                                    id: "ep_1",
+                                    timestamp: "2026-10-31T12:00:00+08:00",
+                                    summary: "今天完成了 Phase C 的插件开发。",
+                                },
+                                {
+                                    id: "ep_2",
+                                    timestamp: "2026-10-30T10:00:00+08:00",
+                                    summary: "爹地拍板记忆系统方案。",
+                                },
+                            ],
+                        },
+                    })
+                );
+            } else if (mode === "empty_page") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(
+                    JSON.stringify({
+                        data: {
+                            total_count: 15,
+                            episodes: [],
+                        },
+                    })
+                );
+            }
         },
         async (everosUrl) => {
             const cfg = resolveConfig({ everosUrl });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const listTool = tools.find((t) => t.name === "memory_list");
 
-            const res = await listTool.execute({ limit: 10, offset: 0 });
-            assert.equal(res.ok, true);
-            assert.equal(recordedReq.body.limit, 10);
-            assert.equal(recordedReq.body.offset, 0);
+            // 1. offset=0, limit=10 -> page=1, page_size=10
+            const res1 = await listTool.execute({ limit: 10, offset: 0 });
+            assert.equal(res1.ok, true);
+            assert.equal(recordedReq.body.page, 1);
+            assert.equal(recordedReq.body.page_size, 10);
+            assert.equal(recordedReq.body.limit, undefined);
+            assert.equal(recordedReq.body.offset, undefined);
             assert.equal(recordedReq.body.memory_type, "episode");
 
-            assert.match(res.data, /- 2026-10-31 今天完成了 Phase C 的插件开发。/);
-            assert.match(res.data, /- 2026-10-30 爹地拍板记忆系统方案。/);
-            assert.match(res.data, /共 15 条，已显示 1-2/);
+            assert.match(res1.data, /- 2026-10-31 今天完成了 Phase C 的插件开发。/);
+            assert.match(res1.data, /- 2026-10-30 爹地拍板记忆系统方案。/);
+            assert.match(res1.data, /共 15 条，已显示 1-2$/);
+
+            // 2. offset=10, limit=10 -> page=2, page_size=10
+            const res2 = await listTool.execute({ limit: 10, offset: 10 });
+            assert.equal(res2.ok, true);
+            assert.equal(recordedReq.body.page, 2);
+            assert.equal(recordedReq.body.page_size, 10);
+            assert.equal(recordedReq.body.limit, undefined);
+            assert.equal(recordedReq.body.offset, undefined);
+            assert.match(res2.data, /共 15 条，已显示 11-12$/);
+
+            // 3. offset=15, limit=10 -> page=2, page_size=10, 对齐说明
+            const res3 = await listTool.execute({ limit: 10, offset: 15 });
+            assert.equal(res3.ok, true);
+            assert.equal(recordedReq.body.page, 2);
+            assert.equal(recordedReq.body.page_size, 10);
+            assert.match(res3.data, /共 15 条，已显示 11-12/);
+            assert.match(res3.data, /（offset 按页对齐到 10）/);
+
+            // 4. 空页时：共 15 条，已显示 0-0
+            mode = "empty_page";
+            const resEmpty = await listTool.execute({ limit: 10, offset: 50 });
+            assert.equal(resEmpty.ok, true);
+            assert.equal(resEmpty.data, "共 15 条，已显示 0-0");
         }
     );
 });
 
 test("P8: memory_status - 健康与不可用状态检查", async () => {
-    let mode = "healthy";
+    let mode = "no_root";
 
     await withMockEverOS(
         (req, res) => {
-            if (mode === "healthy") {
+            if (mode === "no_root") {
+                // 真实 EverOS 1.6.0 GET /health 无 root 字段
                 res.writeHead(200, { "Content-Type": "application/json" });
                 res.end(
                     JSON.stringify({
@@ -359,7 +452,17 @@ test("P8: memory_status - 健康与不可用状态检查", async () => {
                         status: "ok",
                         capabilities: { embed: true },
                         cascade: { healthy: true },
-                        root: "/data/everos",
+                    })
+                );
+            } else if (mode === "has_root") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(
+                    JSON.stringify({
+                        version: "1.6.0",
+                        status: "ok",
+                        capabilities: { embed: true },
+                        cascade: { healthy: true },
+                        root: "/custom/everos-root",
                     })
                 );
             } else {
@@ -369,18 +472,27 @@ test("P8: memory_status - 健康与不可用状态检查", async () => {
         },
         async (everosUrl) => {
             const cfg = resolveConfig({ everosUrl });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const statusTool = tools.find((t) => t.name === "memory_status");
 
-            // 健康
-            const resOk = await statusTool.execute({});
-            assert.equal(resOk.ok, true);
+            // 1. 真实情况：health 无 root，回退到 cfg.mdRoot（默认 /data/everos）
+            const resDefaultRoot = await statusTool.execute({});
+            assert.equal(resDefaultRoot.ok, true);
             assert.equal(
-                resOk.data,
+                resDefaultRoot.data,
                 "EverOS 1.6.0 status=ok embed=true cascade=true · md 根：/data/everos"
             );
 
-            // 失败
+            // 2. health 返回 root 时优先使用
+            mode = "has_root";
+            const resExplicitRoot = await statusTool.execute({});
+            assert.equal(resExplicitRoot.ok, true);
+            assert.equal(
+                resExplicitRoot.data,
+                "EverOS 1.6.0 status=ok embed=true cascade=true · md 根：/custom/everos-root"
+            );
+
+            // 3. 失败
             mode = "fail";
             const resFail = await statusTool.execute({});
             assert.equal(resFail.ok, false);
@@ -399,7 +511,7 @@ test("P11: 超时 - 假服务挂起时在 timeoutMs 内返回错误且不崩溃"
                 everosUrl,
                 timeoutMs: 50, // 50ms 超时
             });
-            const tools = buildMemoryTools(cfg);
+            const tools = buildMemoryHandlers(cfg);
             const searchTool = tools.find((t) => t.name === "memory_search");
 
             const start = Date.now();

@@ -58,7 +58,7 @@ function arr(v) {
 /**
  * 当配置非法时，构建返回清晰错误信息的假工具集，防止 DSH 崩溃同时提示错误。
  */
-export function buildDisabledTools(configErrorMsg) {
+export function buildDisabledHandlers(configErrorMsg) {
     const errorResult = (name) => {
         if (name === "memory_status") {
             return bad("EVEROS_UNAVAILABLE", `EverOS 不可用：配置错误: ${configErrorMsg}`);
@@ -74,6 +74,7 @@ export function buildDisabledTools(configErrorMsg) {
         mk("memory_status", "查看 EverOS 状态。", {}, async () => errorResult("memory_status")),
     ];
 }
+export const buildDisabledTools = buildDisabledHandlers;
 
 /**
  * 统一工具包装函数，不依赖 @deepseek-ai/dsh-tools，纯 JS 对象构造。
@@ -182,9 +183,50 @@ export async function doFetch(url, options = {}, timeoutMs = 120000, externalSig
 }
 
 /**
- * 构建 5 个与 EverOS 后端对接的记忆工具。
+ * 格式化 profile_data 为人类可读文本。
  */
-export function buildMemoryTools(cfg, logger) {
+export function formatProfileData(data) {
+    if (!data || typeof data !== "object") {
+        return null;
+    }
+    const lines = [];
+    if (typeof data.summary === "string" && data.summary.trim()) {
+        lines.push(`摘要：${data.summary.trim()}`);
+    }
+
+    if (Array.isArray(data.explicit_info) && data.explicit_info.length > 0) {
+        const total = data.explicit_info.length;
+        const slice = data.explicit_info.slice(0, 50);
+        for (const item of slice) {
+            const cat = item?.category ? String(item.category).trim() : "未分类";
+            const desc = item?.description
+                ? String(item.description).trim()
+                : (item?.content ? String(item.content).trim() : JSON.stringify(item));
+            lines.push(`- [${cat}] ${desc}`);
+        }
+        if (total > 50) {
+            lines.push(`- …（共 ${total} 条，已显示 50 条）`);
+        }
+    }
+
+    if (Array.isArray(data.implicit_traits) && data.implicit_traits.length > 0) {
+        lines.push("隐性特质：");
+        for (const trait of data.implicit_traits) {
+            const t = typeof trait === "string" ? trait.trim() : (trait?.description ?? trait?.content ?? JSON.stringify(trait));
+            lines.push(`- ${t}`);
+        }
+    }
+
+    if (lines.length > 0) {
+        return lines.join("\n");
+    }
+    return null;
+}
+
+/**
+ * 构建 5 个与 EverOS 后端对接的记忆工具处理函数（handlers）。
+ */
+export function buildMemoryHandlers(cfg, logger) {
     // 1. memory_search
     const memorySearch = mk(
         "memory_search",
@@ -415,8 +457,8 @@ export function buildMemoryTools(cfg, logger) {
                 app_id: cfg.appId,
                 project_id: cfg.projectId,
                 memory_type: "profile",
-                limit: 1,
-                offset: 0,
+                page: 1,
+                page_size: 1,
             };
 
             try {
@@ -444,7 +486,10 @@ export function buildMemoryTools(cfg, logger) {
 
                 const first = profiles[0];
                 let outText = "";
-                if (first.profile_data && typeof first.profile_data === "object") {
+                const formatted = formatProfileData(first.profile_data);
+                if (formatted !== null) {
+                    outText = formatted;
+                } else if (first.profile_data && typeof first.profile_data === "object") {
                     outText = Object.entries(first.profile_data)
                         .map(([k, v]) => `${k}：${typeof v === "object" ? JSON.stringify(v) : v}`)
                         .join("\n");
@@ -481,13 +526,18 @@ export function buildMemoryTools(cfg, logger) {
                 offset = Math.max(0, Math.floor(args.offset));
             }
 
+            const page = Math.floor(offset / limit) + 1;
+            const pageSize = limit;
+            const alignedOffset = (page - 1) * pageSize;
+            const isUnaligned = offset % limit !== 0;
+
             const payload = {
                 user_id: cfg.userId,
                 app_id: cfg.appId,
                 project_id: cfg.projectId,
                 memory_type: "episode",
-                limit,
-                offset,
+                page,
+                page_size: pageSize,
             };
 
             try {
@@ -520,8 +570,13 @@ export function buildMemoryTools(cfg, logger) {
                 });
 
                 const countShown = episodes.length;
-                const rangeStr = countShown > 0 ? `${offset + 1}-${offset + countShown}` : "0-0";
-                const footer = `共 ${totalCount} 条，已显示 ${rangeStr}`;
+                const start = (page - 1) * pageSize + 1;
+                const end = start + countShown - 1;
+                const rangeStr = countShown > 0 ? `${start}-${end}` : "0-0";
+                let footer = `共 ${totalCount} 条，已显示 ${rangeStr}`;
+                if (isUnaligned) {
+                    footer += `\n（offset 按页对齐到 ${alignedOffset}）`;
+                }
 
                 const resultText = itemLines.length > 0 ? `${itemLines.join("\n")}\n${footer}` : footer;
                 return { ok: true, data: resultText };
@@ -559,7 +614,7 @@ export function buildMemoryTools(cfg, logger) {
                 const cascade = typeof json.cascade?.healthy === "boolean"
                     ? json.cascade.healthy
                     : (typeof json.cascade === "boolean" ? json.cascade : false);
-                const root = json.root ?? json.md_root ?? cfg.everosRoot ?? "/work/everos";
+                const root = json.root ?? json.md_root ?? cfg.mdRoot ?? "/data/everos";
 
                 return {
                     ok: true,
@@ -581,3 +636,5 @@ export function buildMemoryTools(cfg, logger) {
         memoryStatus,
     ];
 }
+
+export const buildMemoryTools = buildMemoryHandlers;

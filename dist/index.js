@@ -2,7 +2,7 @@ import { createUserMessage } from "@deepseek-ai/dsh-llm";
 import { resolveConfig, isWorkspaceAllowed, isTopLevelSession } from "./config.js";
 import { createSoulManager } from "./soul.js";
 import { readResidentContent, formatResidentXml } from "./resident.js";
-import { buildMemoryTools, buildDisabledTools } from "./tools.js";
+import { buildMemoryTools, buildDisabledTools } from "./define.js";
 
 export const name = "riko-memory-dsh";
 export const inject = ["tools"];

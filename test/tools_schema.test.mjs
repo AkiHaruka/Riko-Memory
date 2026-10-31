@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolveConfig } from "../dist/config.js";
-import { buildMemoryTools, RESULT_SCHEMA } from "../dist/tools.js";
+import { buildMemoryHandlers, RESULT_SCHEMA } from "../dist/tools.js";
 
 test("P2: 工具 schema - 5 个工具名与 schema 结构正确", () => {
     const cfg = resolveConfig({});
-    const tools = buildMemoryTools(cfg, console);
+    const tools = buildMemoryHandlers(cfg, console);
 
     assert.equal(tools.length, 5);
 

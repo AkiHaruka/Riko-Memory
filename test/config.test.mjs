@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolveConfig, isWorkspaceAllowed, isTopLevelSession } from "../dist/config.js";
-import { buildDisabledTools } from "../dist/tools.js";
+import { buildDisabledHandlers } from "../dist/tools.js";
 
 test("P1: 配置解析 - 缺省值填充与合法配置", () => {
     const cfg = resolveConfig({});
@@ -17,6 +17,7 @@ test("P1: 配置解析 - 缺省值填充与合法配置", () => {
     assert.equal(cfg.residentFile, "/root/riko/memory/resident.md");
     assert.equal(cfg.residentBudgetChars, 6000);
     assert.equal(cfg.toolsEnabled, true);
+    assert.equal(cfg.mdRoot, "/data/everos");
     assert.deepEqual(cfg.workspaceAllow, ["/root/riko"]);
 
     // 自定义合法配置覆盖
@@ -24,11 +25,13 @@ test("P1: 配置解析 - 缺省值填充与合法配置", () => {
         everosUrl: "https://everos.internal:18100/",
         timeoutMs: 30000,
         residentBudgetChars: 4000,
+        mdRoot: "/data/custom-everos",
         workspaceAllow: ["/data/custom"],
     });
     assert.equal(custom.everosUrl, "https://everos.internal:18100");
     assert.equal(custom.timeoutMs, 30000);
     assert.equal(custom.residentBudgetChars, 4000);
+    assert.equal(custom.mdRoot, "/data/custom-everos");
     assert.deepEqual(custom.workspaceAllow, ["/data/custom"]);
 });
 
@@ -38,6 +41,7 @@ test("P1: 配置解析 - 非法值报错且提供不崩溃的假工具保护", a
     assert.throws(() => resolveConfig({ everosUrl: "ftp://invalid" }), /http/);
     assert.throws(() => resolveConfig({ timeoutMs: -100 }), /timeoutMs/);
     assert.throws(() => resolveConfig({ residentBudgetChars: 0 }), /residentBudgetChars/);
+    assert.throws(() => resolveConfig({ mdRoot: "" }), /mdRoot/);
     assert.throws(() => resolveConfig({ workspaceAllow: "not-an-array" }), /workspaceAllow/);
 
     // 验证配置非法时生成的假工具：返回清晰错误文本，不让 DSH 崩溃
@@ -49,7 +53,7 @@ test("P1: 配置解析 - 非法值报错且提供不崩溃的假工具保护", a
     }
     assert.ok(caughtErr);
 
-    const fallbackTools = buildDisabledTools(caughtErr.message);
+    const fallbackTools = buildDisabledHandlers(caughtErr.message);
     assert.equal(fallbackTools.length, 5);
 
     const searchTool = fallbackTools.find((t) => t.name === "memory_search");
