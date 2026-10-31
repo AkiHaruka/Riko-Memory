@@ -162,7 +162,7 @@ docker logs --tail 300 riko-dsh 2>&1 | grep "riko-memory-dsh"
    - 调用 `memory_search`（如 `query="记忆系统"`）应有结果；
    - 调用 `memory_list` 第一页 footer 形如 `共 N 条，已显示 1-10`。
 4. 在 **DSH 会话里**人工确认：SOUL 注入。在新会话里观察 Agent 的自我认知/说话风格是否符合 soul；脚本无法断言，需人工检查。
-5. 在 **DSH 会话里**人工确认：常驻记忆注入。发生一次 compact 后，下一轮 pre-step 会出现 `<riko-resident>` 包裹的注入消息；等自然 compact 或手动触发压缩后观察会话确认。
+5. 在 **DSH 会话里**人工确认：常驻记忆注入。发生一次 compact 后，下一轮 pre-step 会出现 `<agent_memory:resident>` 包裹的注入消息；等自然 compact 或手动触发压缩后观察会话确认。
 6. 排错指南（若工具未出现）：
    - 在**宿主**查看日志，若搜到 `Cannot find package`：说明 peerDependencies 缺失，在 **DSH 容器内**重跑 `scripts/link-peers.sh`；
    - 在**宿主**查看日志，若搜到 `riko-memory-dsh` 名字解析错误：检查 **DSH 容器内** profile 软链是否建立（`/root/.dsh/profiles/web/node_modules/riko-memory-dsh`）。
