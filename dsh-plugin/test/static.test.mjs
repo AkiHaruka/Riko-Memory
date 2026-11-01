@@ -19,19 +19,8 @@ function extractImports(sourceCode) {
 }
 
 test("P12: 静态检查 - dist/index.js 与 define.js import 的模块符合白名单约束", () => {
-    // 1. 读取参考实现 dist/index.js 中出现的外部包（相对路径，不硬编码 /work）
-    const refIndexPath = join(rootDir, "..", "..", "research", "hymem-dsh-reference", "dist", "index.js");
-    if (!existsSync(refIndexPath)) {
-        assert.fail(`参考实现 index.js 不存在，实际查找路径: ${refIndexPath}`);
-    }
-    const refCode = readFileSync(refIndexPath, "utf8");
-    const refImports = extractImports(refCode);
-    const refDshPackages = new Set(
-        refImports.filter((pkg) => pkg.startsWith("@deepseek-ai/"))
-    );
-
-    // 参考实现中 dist/index.js 引入的 DSH 包应该只有 @deepseek-ai/dsh-llm
-    assert.deepEqual(Array.from(refDshPackages), ["@deepseek-ai/dsh-llm"]);
+    // 1. 白名单：dist/index.js 允许引入的 DSH 包（原参考实现里只有 dsh-llm）
+    const refDshPackages = new Set(["@deepseek-ai/dsh-llm"]);
 
     // 2. 检查新实现的 dist/index.js
     const targetIndexPath = join(rootDir, "dist", "index.js");
