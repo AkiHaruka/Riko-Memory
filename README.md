@@ -1,6 +1,6 @@
-# riko-memory-dsh
+# Riko-Memory
 
-**璃的 P2 记忆系统（EverOS 事实轨）DSH 插件** —— 将 DSH 记忆底座由 Hy-Memory 切换为 EverOS。
+**璃的记忆系统（EverOS 事实轨）DSH 插件**（包名 riko-memory-dsh） —— 将 DSH 记忆底座由 Hy-Memory 切换为 EverOS。
 
 本插件为 DeepSeek Harness（DSH）提供三项核心能力：
 1. **记忆工具（5 个）**：`memory_search`、`memory_remember`、`memory_profile`、`memory_list`、`memory_status`，通过官方 `defineTool` 规范直连 EverOS HTTP 服务。
