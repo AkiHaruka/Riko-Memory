@@ -82,6 +82,22 @@
 > [!IMPORTANT]
 > **重启注意**：宿主重启 `riko-dsh` 容器会导致约 30–90 秒 QQ 离线，**必须先征得爹地同意**后方可执行。
 
+### 0. 安装方式
+
+发布版从 npm 安装：
+
+```bash
+npm install riko-memory-dsh
+```
+
+在 DSH profile 里安装：
+
+```bash
+npm install --prefix /root/.dsh/profiles/web riko-memory-dsh
+```
+
+peerDependencies 由 DSH 运行时提供；如果 npm 解析不到，执行 `scripts/link-peers.sh` 补软链（脚本已随包发布）。本仓库开发版跳过这步，直接用下面第 1 步的软链。
+
 ### 1. 建立 profile 插件软链
 在 DSH 容器内执行：
 ```bash

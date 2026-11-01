@@ -1,7 +1,7 @@
 {
     "name": "riko-memory-dsh",
     "version": "0.1.0",
-    "description": "EverOS 的 DSH 适配层：记忆工具 + SOUL 注入 + MEMORY 常驻注入",
+    "description": "Riko-Memory 的 DeepSeek Harness 插件：EverOS 记忆工具 + SOUL/常驻记忆注入",
     "type": "module",
     "main": "dist/index.js",
     "exports": {
@@ -11,10 +11,33 @@
     },
     "files": [
         "dist",
+        "scripts",
         "README.md"
     ],
     "scripts": {
         "test": "node --test test/*.test.mjs"
+    },
+    "keywords": [
+        "deepseek-harness",
+        "dsh",
+        "dsh-plugin",
+        "memory",
+        "everos",
+        "agent-memory"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/AkiHaruka/Riko-Memory.git",
+        "directory": "dsh-plugin"
+    },
+    "homepage": "https://github.com/AkiHaruka/Riko-Memory/tree/main/dsh-plugin#readme",
+    "bugs": {
+        "url": "https://github.com/AkiHaruka/Riko-Memory/issues"
+    },
+    "author": "璃 (Riko)",
+    "license": "Apache-2.0",
+    "publishConfig": {
+        "access": "public"
     },
     "peerDependencies": {
         "@deepseek-ai/cordis": "^4.0.4",
@@ -24,8 +47,27 @@
         "@deepseek-ai/dsh-system-prompt": ">=0.2.1-rc.2 <0.3.0",
         "@deepseek-ai/dsh-tools": ">=0.2.1-rc.2 <0.3.0"
     },
+    "peerDependenciesMeta": {
+        "@deepseek-ai/cordis": {
+            "optional": true
+        },
+        "@deepseek-ai/dsh-agent": {
+            "optional": true
+        },
+        "@deepseek-ai/dsh-llm": {
+            "optional": true
+        },
+        "@deepseek-ai/dsh-session": {
+            "optional": true
+        },
+        "@deepseek-ai/dsh-system-prompt": {
+            "optional": true
+        },
+        "@deepseek-ai/dsh-tools": {
+            "optional": true
+        }
+    },
     "engines": {
         "node": ">=18.0.0"
-    },
-    "license": "Apache-2.0"
+    }
 }
