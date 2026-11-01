@@ -1,0 +1,4 @@
+# riko-memory-dsh bundle patch —— 故意为空。
+# 实例配置放在 profile 的 cordis.patch.yml 里（entry id: riko-memory-dsh）。
+# 文件必须存在且合法，否则 DSH 会把本包标成「没有声明组合包」异常。
+[]

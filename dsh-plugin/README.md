@@ -98,6 +98,8 @@ npm install --prefix /root/.dsh/profiles/web riko-memory-dsh
 
 peerDependencies 由 DSH 运行时提供；如果 npm 解析不到，执行 `scripts/link-peers.sh` 补软链（脚本已随包发布）。本仓库开发版跳过这步，直接用下面第 1 步的软链。
 
+包内 `cordis.patch.yml` 是空组合包声明：DSH 要求每个 profile 组合包必须有可解析的 patch 文件，否则会在插件页标成「没有声明组合包」。实例配置不写在这个文件里，统一放 profile 的 `cordis.patch.yml`（entry id: `riko-memory-dsh`）。在 DSH 插件页把这个包加入 profile 组合包后，插件页会显示它。
+
 ### 1. 建立 profile 插件软链
 在 DSH 容器内执行：
 ```bash

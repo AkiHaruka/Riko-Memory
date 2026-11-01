@@ -1,6 +1,6 @@
 {
     "name": "riko-memory-dsh",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Riko-Memory 的 DeepSeek Harness 插件：EverOS 记忆工具 + SOUL/常驻记忆注入",
     "type": "module",
     "main": "dist/index.js",
@@ -12,6 +12,7 @@
     "files": [
         "dist",
         "scripts",
+        "cordis.patch.yml",
         "README.md"
     ],
     "scripts": {
@@ -33,6 +34,11 @@
     "homepage": "https://github.com/AkiHaruka/Riko-Memory/tree/main/dsh-plugin#readme",
     "bugs": {
         "url": "https://github.com/AkiHaruka/Riko-Memory/issues"
+    },
+    "dsh": {
+        "bundle": {
+            "patch": "./cordis.patch.yml"
+        }
     },
     "author": "璃 (Riko)",
     "license": "Apache-2.0",
