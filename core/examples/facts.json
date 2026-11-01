@@ -1,0 +1,20 @@
+{
+  "sessions_root": "/root/.dsh/sessions/--root-riko--",
+  "state_path": "/root/riko/var/facts.state.json",
+  "log_path": "/root/riko/var/facts.log",
+  "lock_path": "/root/riko/var/facts.lock",
+  "endpoint": "http://127.0.0.1:18100",
+  "app_id": "riko",
+  "project_id": "main",
+  "user_sender_id": "aki",
+  "user_sender_name": "爹地",
+  "skip_recent_seconds": 60,
+  "idle_flush_seconds": 900,
+  "max_messages_per_call": 200,
+  "max_chars_per_call": 200000,
+  "max_calls_per_run": 40,
+  "max_flushes_per_run": 2,
+  "timeout_seconds": 240,
+  "stale_lock_seconds": 1800,
+  "curl_path": "/usr/bin/curl"
+}
